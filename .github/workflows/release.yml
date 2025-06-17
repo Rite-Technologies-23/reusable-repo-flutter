@@ -2,6 +2,9 @@ name: Incremental Release
 
 on:
   workflow_call:
+    secrets:
+      PAT_TOKEN:
+        required: true
     outputs:
       version:
         description: "The new release version tag"
@@ -60,7 +63,10 @@ jobs:
         run: flutter build apk --release --split-per-abi
 
       - name: Tag New Release
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
           git tag ${{ steps.version.outputs.tag }}
           git push origin ${{ steps.version.outputs.tag }}
 
