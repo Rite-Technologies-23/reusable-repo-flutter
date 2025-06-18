@@ -59,32 +59,24 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Validate PAT Access to Target Repo
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Checking if PAT has access to target repo..."
-          curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${PAT_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/Darryl-Cardoza/devops-testing-flutter
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi
 
       - name: Tag New Release
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          echo "Unset default GitHub Actions credentials..."
-          git config --global --unset credential.helper || true
+         echo "Unset default GitHub Actions credentials..."
+         git config --global --unset credential.helper || true
+    
+         echo "Set authenticated remote..."
+         git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
+         git remote -v
+    
+         echo "Tag and push..."
+         git tag ${{ steps.version.outputs.tag }}
+         git push origin ${{ steps.version.outputs.tag }}
 
-          echo "Set authenticated remote..."
-          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/Darryl-Cardoza/devops-testing-flutter.git
-
-          echo "Show current Git remote URL..."
-          git remote -v
-
-          echo "Tag and push..."
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin ${{ steps.version.outputs.tag }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
