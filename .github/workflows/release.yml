@@ -34,18 +34,22 @@ jobs:
       - name: Get Latest Tag and Bump Version
         id: version
         run: |
-          latest_tag=$(git tag --sort=-v:refname | grep '^v' | head -n 1)
-          echo "Latest tag: $latest_tag"
-
-          if [ -z "$latest_tag" ]; then
-            new_tag="v1.0.0"
+          if [ -n "${{ inputs.version }}" ]; then
+            new_tag="${{ inputs.version }}"
           else
-            version=${latest_tag#v}
-            IFS='.' read -r major minor patch <<< "$version"
-            patch=$((patch + 1))
-            new_tag="v$major.$minor.$patch"
+            latest_tag=$(git tag --sort=-v:refname | grep '^v' | head -n 1)
+            echo "Latest tag: $latest_tag"
+      
+            if [ -z "$latest_tag" ]; then
+              new_tag="v1.0.0"
+            else
+              version=${latest_tag#v}
+              IFS='.' read -r major minor patch <<< "$version"
+              patch=$((patch + 1))
+              new_tag="v$major.$minor.$patch"
+            fi
           fi
-
+      
           echo "New tag: $new_tag"
           echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
 
