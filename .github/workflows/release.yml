@@ -68,9 +68,12 @@ jobs:
         run: |
          echo "Unset default GitHub Actions credentials..."
          git config --global --unset credential.helper || true
+
+         echo "Inject PAT credentials manually..."
+         echo "machine github.com login x-access-token password ${PAT_TOKEN}" > ~/.netrc
     
          echo "Set authenticated remote..."
-         git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
+         git remote set-url origin https://github.com/${{ github.repository }}.git
          git remote -v
     
          echo "Tag and push..."
