@@ -2,6 +2,10 @@ name: Incremental Release
 
 on:
   workflow_call:
+    inputs:
+        version:
+          required: false
+          type: string
     secrets:
       PAT_TOKEN:
         required: true
@@ -77,6 +81,9 @@ jobs:
            echo "Set remote using HTTPS"
            git remote set-url origin https://github.com/${{ github.repository }}.git
            git remote -v
+
+           echo "Create Git tag"
+           git tag ${{ steps.version.outputs.tag }}
   
            echo "Tag and push with PAT using AskPass"
            GIT_ASKPASS=./askpass.sh git push origin ${{ steps.version.outputs.tag }}
