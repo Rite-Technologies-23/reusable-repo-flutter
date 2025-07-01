@@ -17,8 +17,6 @@ env:
   FLUTTER_VERSION: ${{ vars.FLUTTER_VERSION }}
   FLUTTER_CHANNEL: ${{ vars.FLUTTER_CHANNEL }}
   COVERAGE_THRESHOLD: ${{ vars.COVERAGE_THRESHOLD }}
-  CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN || '' }}
-  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN || '' }}
 
 jobs:
   test_and_coverage:
@@ -108,19 +106,19 @@ jobs:
     name: Upload Reports to Codacy
     runs-on: ubuntu-latest
     needs: coverage_validation
-    if: ${{ env.CODACY_PROJECT_TOKEN != '' }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Upload Coverage to Codacy
+        if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
         run: |
           bash <(curl -Ls https://coverage.codacy.com/get.sh) report \
             --language Dart \
             --coverage-reports coverage/lcov.info \
             --commit-uuid ${{ github.sha }} \
-            --project-token ${{ env.CODACY_PROJECT_TOKEN }}
+            --project-token ${{ secrets.CODACY_PROJECT_TOKEN }}
 
   build:
     name: Build Flutter App
@@ -154,7 +152,6 @@ jobs:
     name: Static Analysis - Codacy & Dart Analyzer
     runs-on: ubuntu-latest
     needs: test_and_coverage
-    if: ${{ env.CODACY_PROJECT_TOKEN != '' }}
 
     permissions:
       contents: read
@@ -180,11 +177,13 @@ jobs:
           path: analyzer-report.txt
 
       - name: Set up Codacy CLI
+        if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
         run: |
           curl -Ls https://raw.githubusercontent.com/codacy/codacy-cli-v2/main/codacy-cli.sh \
             -o /tmp/codacy-cli-v2 && chmod +x /tmp/codacy-cli-v2
 
       - name: Run Static Code Analysis with Codacy
+        if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
         run: |
           /tmp/codacy-cli-v2 analyze \
             --tool dartanalyzer \
@@ -192,12 +191,13 @@ jobs:
             --output ./results.sarif
 
       - name: Upload SARIF Results to Codacy
+        if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
         run: |
           if [ -f ./results.sarif ]; then
             /tmp/codacy-cli-v2 upload \
               --sarif-path ./results.sarif \
               --commit-uuid ${{ github.sha }} \
-              --project-token ${{ env.CODACY_PROJECT_TOKEN }}
+              --project-token ${{ secrets.CODACY_PROJECT_TOKEN }}
           else
             echo "No SARIF file found, skipping upload"
           fi
@@ -206,15 +206,15 @@ jobs:
     name: Static Analysis - SonarQube
     runs-on: ubuntu-latest
     needs: test_and_coverage
-    if: ${{ env.SONAR_TOKEN != '' }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: SonarQube Scan
+        if: ${{ secrets.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarqube-scan-action@v5
         with:
           projectBaseDir: .
         env:
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
