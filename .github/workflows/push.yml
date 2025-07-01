@@ -216,13 +216,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: SonarQube Scan
-        run: |
-          if [ "$SONAR_TOKEN" != "none" ]; then
-            echo "Running SonarQube scan..."
-            export SONAR_TOKEN="$SONAR_TOKEN"
-            sonar-scanner \
-              -Dsonar.projectBaseDir=. \
-              -Dsonar.login=$SONAR_TOKEN
-          else
-            echo "SONAR_TOKEN not provided, skipping SonarQube scan."
-          fi
+        uses: SonarSource/sonarqube-scan-action@v5
+        with:
+          projectBaseDir: .
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+
