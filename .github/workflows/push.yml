@@ -212,14 +212,14 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN || 'none' }}
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5
-        with:
-          projectBaseDir: .
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    - name: Run SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v5
+      with:
+        projectBaseDir: .
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 
