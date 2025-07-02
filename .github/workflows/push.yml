@@ -19,11 +19,9 @@ env:
   COVERAGE_THRESHOLD: ${{ vars.COVERAGE_THRESHOLD }}
 
 jobs:
-  test_and_coverage:
-    name: Run Tests & Generate Coverage
+  build_flutter_project:
+    name: Build Flutter Project
     runs-on: ubuntu-latest
-    outputs:
-      test-report-path: test-results/test-report.html
 
     steps:
       - name: Checkout Repository
@@ -37,6 +35,23 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 17
+
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
+
+      - name: Flutter Pub Get
+        run: flutter pub get
+
+  run_tests:
+    name: Run Test Cases & Generate Report
+    runs-on: ubuntu-latest
+    needs: build_flutter_project
+    outputs:
+      test-report-path: test-results/test-report.html
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
@@ -64,10 +79,10 @@ jobs:
           name: Flutter-Test-Report
           path: test-results/test-report.html
 
-  coverage_validation:
-    name: Validate Code Coverage
+  test_coverage:
+    name: Run Test Coverage & Generate Report
     runs-on: ubuntu-latest
-    needs: test_and_coverage
+    needs: run_tests
 
     steps:
       - name: Checkout Repository
@@ -102,10 +117,36 @@ jobs:
             exit 1
           fi
 
-  build:
-    name: Build Flutter App
+  dart_analyzer:
+    name: Run Dart Analyzer & Generate Report
     runs-on: ubuntu-latest
-    needs: test_and_coverage
+    needs: run_tests
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
+
+      - name: Run Dart Analyzer
+        run: dart analyze > analyzer-report.txt || true
+
+      - name: Convert Analyzer Report to HTML
+        run: dart run .github/tool/analyzer_to_html.dart
+
+      - name: Upload Dart Analyzer Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dart-Analyzer-Reports
+          path: |
+            analyzer-report.txt
+            analyzer-report.html
+
+  build_apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: dart_analyzer
 
     steps:
       - name: Checkout Repository
@@ -129,49 +170,3 @@ jobs:
       - name: Conditionally Build iOS App
         if: ${{ inputs.build_ios }}
         run: flutter build ios --no-codesign
-
-  analyze_dart:
-    name: Static Analysis - Dart Analyzer
-    runs-on: ubuntu-latest
-    needs: test_and_coverage
-
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
-
-      - name: Run Dart Analyzer
-        run: dart analyze > analyzer-report.txt || true
-
-      - name: Upload Dart Analyzer Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dart-Analyzer-Report
-          path: analyzer-report.txt
-
-  analyze_sonar:
-    name: Static Analysis - SonarQube
-    runs-on: ubuntu-latest
-    needs: test_and_coverage
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN || 'none' }}
-
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    - name: Run SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v5
-      with:
-        projectBaseDir: .
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-
