@@ -1,5 +1,13 @@
 name: Setup Flutter and Dart Utilities
-description: Sets up Flutter and fetches reusable Dart tooling scripts
+description: Sets up Flutter SDK and fetches reusable Dart tooling scripts
+
+inputs:
+  flutter_version:
+    required: true
+    description: The version of Flutter to install
+  flutter_channel:
+    required: true
+    description: The Flutter release channel to use
 
 runs:
   using: "composite"
@@ -7,8 +15,8 @@ runs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        channel: ${{ env.FLUTTER_CHANNEL }}
+        flutter-version: ${{ inputs.flutter_version }}
+        channel: ${{ inputs.flutter_channel }}
 
     - name: Flutter Pub Get
       shell: bash
