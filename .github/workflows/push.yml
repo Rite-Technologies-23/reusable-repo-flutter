@@ -105,6 +105,9 @@ jobs:
           flutter_version: ${{ inputs.flutter_version }}
           flutter_channel: ${{ inputs.flutter_channel }}
 
+      - name: Install lcov
+        run: sudo apt-get update && sudo apt-get install -y lcov
+
       - name: Generate HTML Coverage Report
         run: |
           mkdir -p coverage_report
@@ -168,9 +171,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Load Environment Variables
-        run: source .github/env.sh
 
       - name: Set Up Java
         uses: actions/setup-java@v4
