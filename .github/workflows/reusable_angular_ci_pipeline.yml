@@ -1,0 +1,246 @@
+name: Angular CI
+
+on:
+  workflow_call:
+    inputs:
+      node_version:
+        required: false
+        type: string
+      coverage_threshold:
+        required: false
+        type: string
+      project_path:
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      CODACY_PROJECT_TOKEN:
+        required: false
+
+jobs:
+  setup:
+    name: Setup & Install Dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      node_version: ${{ steps.setvars.outputs.node_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Env Vars
+        id: setvars
+        run: echo "node_version=${{ inputs.node_version || vars.NODE_VERSION }}" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.setvars.outputs.node_version }}
+
+      - run: npm install
+        working-directory: ${{ inputs.project_path }}
+
+  lint:
+    name: Lint Angular Code
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ needs.setup.outputs.node_version }}
+
+      - run: npm install
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Lint Code
+        run: npx eslint . --ext .ts --config eslint.config.cjs --no-warn-ignored --ignore-pattern coverage/
+        working-directory: ${{ inputs.project_path }}
+
+  test:
+    name: Run Tests & Generate Coverage
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test-results directory
+        run: mkdir -p test-results
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Run Tests
+        run: |
+          echo "Running Angular tests..."
+          npx ng test --code-coverage --watch=false --browsers=ChromeHeadless --karma-config=karma.conf.js || true
+          echo "Tests completed."
+          find . -name "test-results.xml" || echo "test-results.xml not found"
+        working-directory: ${{ inputs.project_path }}
+
+
+      - name: Install Coverage Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov python3-pip
+          pip3 install junit2html
+
+      - name: List contents of test-results
+        run: ls -la test-results
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Convert JUnit XML to HTML
+        run: |
+          if [ -f "./test-results/test-results.xml" ]; then
+            echo "Found test-results.xml. Converting to HTML..."
+            junit2html ./test-results/test-results.xml ./test-results/test-report.html
+          else
+            echo "::warning::test-results.xml not found at ./test-results. Skipping HTML conversion."
+            ls -la ./test-results || echo "Directory test-results not found"
+          fi
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Check CRITICAL Test Failures
+        run: |
+          REPORT="./test-results/test-results.xml"
+          if [[ -f "$REPORT" ]]; then
+            FAILED_CRITICAL=$(awk '/<testcase/ {test=$0} /<failure/ {if (test ~ /\[CRITICAL\]/) print test}' "$REPORT" | wc -l)
+            if [[ "$FAILED_CRITICAL" -gt 0 ]]; then
+              echo "$FAILED_CRITICAL CRITICAL test(s) failed."
+              exit 1
+            else
+              echo "All CRITICAL test cases passed."
+            fi
+          else
+            echo "::warning::Test report not found at $REPORT"
+          fi
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Upload JUnit XML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Angular-JUnit-XML
+          path: ${{ inputs.project_path }}/test-results/test-results.xml
+
+      - name: Upload JUnit HTML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Angular-JUnit-HTML
+          path: ${{ inputs.project_path }}/test-results/test-report.html
+
+  coverage:
+    name: Enforce Coverage Threshold & Report
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version || vars.NODE_VERSION }}
+
+      - name: Install Dependencies
+        run: npm install
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Re-run ng test for coverage if needed
+        run: |
+          echo "🔁 Re-running Angular tests to regenerate coverage..."
+          npx ng test --code-coverage --watch=false --browsers=ChromeHeadless --karma-config=karma.conf.js || true
+        working-directory: ${{ inputs.project_path }}
+        
+      - name: Install lcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Generate HTML Coverage Report
+        run: |
+          genhtml ./coverage/lcov.info \
+            --output-directory test-results/lcov-html \
+            --title "Angular Test Coverage Report" \
+            --show-details \
+            --highlight \
+            --legend
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Beautify LCOV HTML
+        run: |
+          cp lcov-style.css test-results/lcov-html/
+          sed -i 's|</head>|<link rel="stylesheet" href="lcov-style.css">\n</head>|' test-results/lcov-html/index.html
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Enforce Coverage Threshold
+        run: |
+          FILE=coverage/coverage-summary.json
+          echo "Looking for $FILE"
+          if [[ -f "$FILE" ]]; then
+            PCT=$(node -p "require('./$FILE').total.statements.pct")
+            echo "Statements Coverage: $PCT%"
+            if (( $(echo "$PCT < $COVERAGE_THRESHOLD" | bc -l) )); then
+              echo "❌ Coverage $PCT% below threshold $COVERAGE_THRESHOLD%"
+              exit 1
+            fi
+          else
+            echo "::error::Coverage summary not found: $FILE"
+            exit 1
+          fi
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage_threshold || vars.COVERAGE_THRESHOLD }}
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Upload Coverage Directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: Angular-Raw-Coverage
+          path: ${{ inputs.project_path }}/coverage/
+
+      - name: Upload Coverage HTML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Angular-Coverage-HTML
+          path: ${{ inputs.project_path }}/test-results/lcov-html/
+
+  sonar:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    needs: coverage
+    steps:
+      - uses: actions/checkout@v4
+  
+      - name: Install SonarQube CLI
+        run: |
+          echo "Installing SonarQube CLI..."
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+          sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+          sudo ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner
+  
+      - name: Run SonarQube Scan
+        run: |
+          if [ -n "${{ secrets.SONAR_TOKEN }}" ]; then
+            echo "Running SonarQube scan..."
+            sonar-scanner \
+              -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+              -Dsonar.host.url=https://sonarcloud.io
+          else
+            echo "::warning::No SONAR_TOKEN set. Skipping scan."
+          fi
+
+
+  build:
+    name: Build Angular App
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ needs.setup.outputs.node_version }}
+
+      - run: npm install
+        working-directory: ${{ inputs.project_path }}
+
+      - name: Build Angular App
+        run: npx ng build --configuration production
+        working-directory: ${{ inputs.project_path }}
