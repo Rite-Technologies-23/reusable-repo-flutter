@@ -3,22 +3,18 @@ name: "Flutter CI Reusable Workflow"
 on:
   workflow_call:
     inputs:
-      build_ios:
-        required: false
-        type: boolean
-        default: false
       flutter_version:
-        required: false
+        required: true
         type: string
-        default: "3.27.4"
       flutter_channel:
-        required: false
+        required: true
         type: string
-        default: "stable"
       coverage_threshold:
-        required: false
+        required: true
         type: string
-        default: "80.0"
+      build_ios:
+        required: true
+        type: boolean
     secrets:
       SONAR_TOKEN:
         required: false
@@ -47,6 +43,9 @@ jobs:
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        with:
+          flutter_version: ${{ inputs.flutter_version }}
+          flutter_channel: ${{ inputs.flutter_channel }}
 
       - name: Flutter Pub Get
         run: flutter pub get
@@ -64,6 +63,9 @@ jobs:
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        with:
+          flutter_version: ${{ inputs.flutter_version }}
+          flutter_channel: ${{ inputs.flutter_channel }}
 
       - name: Run Flutter Tests (Machine & Coverage Output)
         run: |
@@ -99,6 +101,9 @@ jobs:
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        with:
+          flutter_version: ${{ inputs.flutter_version }}
+          flutter_channel: ${{ inputs.flutter_channel }}
 
       - name: Generate HTML Coverage Report
         run: |
@@ -137,6 +142,9 @@ jobs:
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        with:
+          flutter_version: ${{ inputs.flutter_version }}
+          flutter_channel: ${{ inputs.flutter_channel }}
 
       - name: Run Dart Analyzer
         run: dart analyze > analyzer-report.txt || true
@@ -172,6 +180,9 @@ jobs:
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        with:
+          flutter_version: ${{ inputs.flutter_version }}
+          flutter_channel: ${{ inputs.flutter_channel }}
 
       - name: Build Android APK
         run: flutter build apk --split-per-abi
