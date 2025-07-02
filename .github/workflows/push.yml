@@ -135,7 +135,7 @@ jobs:
       - name: Convert Analyzer Report to HTML
         run: |
           ls -R .github/tool  # debug line to verify file exists
-          dart .github/tool/analyzer_to_html.dart
+          dart .github/tool/analyzer_converter.dart
 
 
       - name: Upload Dart Analyzer Reports
