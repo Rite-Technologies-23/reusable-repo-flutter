@@ -56,6 +56,12 @@ jobs:
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
 
+      - name: Fetch Dart Utility Scripts
+        run: |
+          mkdir -p .github/tool
+          curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/json_to_junit.dart -o .github/tool/json_to_junit.dart
+          curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/run_filtered_tests.dart -o .github/tool/run_filtered_tests.dart
+
       - name: Run Flutter Tests (Machine & Coverage Output)
         run: |
           mkdir -p test-results
@@ -132,11 +138,13 @@ jobs:
       - name: Run Dart Analyzer
         run: dart analyze > analyzer-report.txt || true
 
-      - name: Convert Analyzer Report to HTML
+      - name: Fetch Dart Utility Scripts
         run: |
-          ls -R .github/tool  # debug line to verify file exists
-          dart .github/tool/analyzer_converter.dart
+          mkdir -p .github/tool
+          curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/analyzer_to_html.dart -o .github/tool/analyzer_to_html.dart
 
+      - name: Convert Analyzer Report to HTML
+        run: dart .github/tool/analyzer_to_html.dart
 
       - name: Upload Dart Analyzer Reports
         uses: actions/upload-artifact@v4
