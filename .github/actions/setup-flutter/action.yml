@@ -1,20 +1,23 @@
-name: Setup Flutter and LCOV
-
-description: Sets up Flutter and installs LCOV for coverage reporting
+name: Setup Flutter and Dart Utilities
+description: Sets up Flutter and fetches reusable Dart tooling scripts
 
 runs:
   using: "composite"
   steps:
-    - name: Set Up Flutter
+    - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
         channel: ${{ env.FLUTTER_CHANNEL }}
 
-    - name: Install Dependencies
+    - name: Flutter Pub Get
+      shell: bash
       run: flutter pub get
-      shell: bash
 
-    - name: Install LCOV
-      run: sudo apt-get update && sudo apt-get install -y lcov
+    - name: Fetch Dart Utility Scripts from reusable-repo-flutter
       shell: bash
+      run: |
+        mkdir -p .github/tool
+        curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/analyzer_to_html.dart -o .github/tool/analyzer_to_html.dart
+        curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/json_to_junit.dart -o .github/tool/json_to_junit.dart
+        curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/run_filtered_tests.dart -o .github/tool/run_filtered_tests.dart
