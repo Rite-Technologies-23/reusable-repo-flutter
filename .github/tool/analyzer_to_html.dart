@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 
-void main(List<String> args) async {
+void main() async {
   final inputFile = File('analyzer-report.txt');
   final outputFile = File('analyzer-report.html');
 
   if (!inputFile.existsSync()) {
-    print("analyzer-report.txt not found.");
+    print("❌ analyzer-report.txt not found.");
     exit(1);
   }
 
@@ -51,5 +50,5 @@ void main(List<String> args) async {
   buffer.writeln('</tbody></table></body></html>');
   await outputFile.writeAsString(buffer.toString());
 
-  print("HTML report generated: analyzer-report.html");
+  print("✅ analyzer-report.html generated successfully.");
 }
