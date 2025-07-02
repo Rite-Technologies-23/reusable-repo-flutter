@@ -7,6 +7,18 @@ on:
         required: false
         type: boolean
         default: false
+      flutter_version:
+        required: false
+        type: string
+        default: "3.27.4"
+      flutter_channel:
+        required: false
+        type: string
+        default: "stable"
+      coverage_threshold:
+        required: false
+        type: string
+        default: "80.0"
     secrets:
       SONAR_TOKEN:
         required: false
@@ -14,9 +26,9 @@ on:
         required: false
 
 env:
-  FLUTTER_VERSION: ${{ vars.FLUTTER_VERSION }}
-  FLUTTER_CHANNEL: ${{ vars.FLUTTER_CHANNEL }}
-  COVERAGE_THRESHOLD: ${{ vars.COVERAGE_THRESHOLD }}
+  FLUTTER_VERSION: ${{ inputs.flutter_version }}
+  FLUTTER_CHANNEL: ${{ inputs.flutter_channel }}
+  COVERAGE_THRESHOLD: ${{ inputs.coverage_threshold }}
 
 jobs:
   build_flutter_project:
@@ -34,7 +46,7 @@ jobs:
           java-version: 17
 
       - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
+        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
 
       - name: Flutter Pub Get
         run: flutter pub get
@@ -51,13 +63,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
-
-      - name: Fetch Dart Utility Scripts
-        run: |
-          mkdir -p .github/tool
-          curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/json_to_junit.dart -o .github/tool/json_to_junit.dart
-          curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/run_filtered_tests.dart -o .github/tool/run_filtered_tests.dart
+        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
 
       - name: Run Flutter Tests (Machine & Coverage Output)
         run: |
@@ -92,7 +98,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
+        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
 
       - name: Generate HTML Coverage Report
         run: |
@@ -130,15 +136,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
+        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
 
       - name: Run Dart Analyzer
         run: dart analyze > analyzer-report.txt || true
-
-      - name: Fetch Dart Utility Scripts
-        run: |
-          mkdir -p .github/tool
-          curl -sSL https://raw.githubusercontent.com/Rite-Technologies-23/reusable-repo-flutter/main/.github/tool/analyzer_to_html.dart -o .github/tool/analyzer_to_html.dart
 
       - name: Convert Analyzer Report to HTML
         run: dart .github/tool/analyzer_to_html.dart
@@ -170,7 +171,7 @@ jobs:
           java-version: 17
 
       - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
+        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
 
       - name: Build Android APK
         run: flutter build apk --split-per-abi
