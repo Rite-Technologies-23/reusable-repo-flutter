@@ -27,9 +27,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Load Environment Variables
-        run: source .github/env.sh
-
       - name: Set Up Java
         uses: actions/setup-java@v4
         with:
