@@ -67,11 +67,11 @@ jobs:
           flutter_version: ${{ inputs.flutter_version }}
           flutter_channel: ${{ inputs.flutter_channel }}
 
-      - name: Run All Flutter Tests with Coverage
+      - name: Run Flutter Tests (Machine & Coverage Output)
         run: |
           mkdir -p test-results
-          flutter test --coverage --reporter expanded > test-results/results.log
-          cat test-results/results.log
+          flutter test --coverage --machine > test-results/results.json || true
+          cat test-results/results.json
 
       - name: Convert Test Output to JUnit XML
         run: |
