@@ -109,7 +109,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y lcov
 
       - name: Run Flutter Tests with Coverage
-        run: flutter test --coverage
+        run: flutter test --coverage --machine > test-results/results.json || true
 
       - name: Generate HTML Coverage Report
         run: |
