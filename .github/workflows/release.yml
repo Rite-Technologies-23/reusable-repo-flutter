@@ -3,9 +3,9 @@ name: Incremental Release
 on:
   workflow_call:
     inputs:
-        version:
-          required: false
-          type: string
+      version:
+        required: false
+        type: string
     secrets:
       PAT_TOKEN:
         required: true
@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false  # ✅ Important for using PAT instead of GITHUB_TOKEN
 
       - name: Set Up Git User
         run: |
@@ -39,7 +40,7 @@ jobs:
           else
             latest_tag=$(git tag --sort=-v:refname | grep '^v' | head -n 1)
             echo "Latest tag: $latest_tag"
-      
+
             if [ -z "$latest_tag" ]; then
               new_tag="v1.0.0"
             else
@@ -49,7 +50,7 @@ jobs:
               new_tag="v$major.$minor.$patch"
             fi
           fi
-      
+
           echo "New tag: $new_tag"
           echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
 
@@ -74,20 +75,20 @@ jobs:
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-           echo "Configure Git user"
-           git config user.name "github-actions"
-           git config user.email "github-actions@github.com"
-        
-           echo "Set remote using PAT"
-           git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
-           git remote -v
-        
-           echo "Create Git tag"
-           git tag ${{ steps.version.outputs.tag }}
-        
-           echo "Push Git tag"
-           git push origin ${{ steps.version.outputs.tag }}
-          
+          echo "Configure Git user"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          echo "Set remote using PAT"
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
+          git remote -v
+
+          echo "Create Git tag"
+          git tag ${{ steps.version.outputs.tag }}
+
+          echo "Push Git tag"
+          git push origin ${{ steps.version.outputs.tag }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -97,5 +98,4 @@ jobs:
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-x86_64-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}  # ✅ Explicitly pass PAT here
