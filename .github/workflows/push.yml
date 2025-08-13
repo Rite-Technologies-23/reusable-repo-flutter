@@ -30,8 +30,6 @@ jobs:
   build_flutter_project:
     name: Build Flutter Project
     runs-on: ubuntu-latest
-    outputs:
-      flutter_project_built: true
 
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +64,16 @@ jobs:
           flutter_channel: ${{ inputs.flutter_channel }}
 
       - name: Run Dart Analyzer
-        run: dart analyze > analyzer-report.txt || true
+        run: |
+          dart analyze > analyzer-report.txt
+          analyzer_exit_code=$?
+          echo "Analyzer exit code: $analyzer_exit_code"
+
+          # Fail only if there are errors (exit code != 0)
+          if [ $analyzer_exit_code -ne 0 ]; then
+            echo "Critical Dart analyzer errors found. Aborting build."
+            exit 1
+          fi
 
       - name: Convert Analyzer Report to HTML
         run: dart .github/tool/analyzer_to_html.dart
