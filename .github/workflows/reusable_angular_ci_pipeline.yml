@@ -54,7 +54,7 @@ jobs:
         working-directory: ${{ inputs.project_path }}
 
       - name: Lint Code
-        run: npx eslint . 
+        run: npx eslint . --no-warn-ignored
         working-directory: ${{ inputs.project_path }}
 
   test:
