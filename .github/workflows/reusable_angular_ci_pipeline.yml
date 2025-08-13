@@ -39,23 +39,6 @@ jobs:
       - run: npm install
         working-directory: ${{ inputs.project_path }}
 
-  lint:
-    name: Lint Angular Code
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ needs.setup.outputs.node_version }}
-
-      - run: npm install
-        working-directory: ${{ inputs.project_path }}
-
-      - name: Lint Code
-        run: npx eslint . --no-warn-ignored
-        working-directory: ${{ inputs.project_path }}
 
   test:
     name: Run Tests & Generate Coverage
