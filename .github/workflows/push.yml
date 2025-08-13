@@ -65,17 +65,17 @@ jobs:
 
       - name: Run Dart Analyzer
         run: |
-          dart analyze > analyzer-report.txt
+          dart analyze > analyzer-report.txt || true
           echo "Analyzer completed."
-      
-          # Check if 'error •' exists in report
+
+      - name: Check for Dart Errors
+        run: |
           if grep -q "error •" analyzer-report.txt; then
             echo "Critical Dart analyzer errors found. Aborting build."
             exit 1
           else
             echo "No critical errors found. Warnings will be ignored."
           fi
-
 
       - name: Convert Analyzer Report to HTML
         run: dart .github/tool/analyzer_to_html.dart
