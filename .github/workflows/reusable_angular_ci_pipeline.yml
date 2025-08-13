@@ -54,7 +54,7 @@ jobs:
         working-directory: ${{ inputs.project_path }}
 
       - name: Lint Code
-        run: npx eslint . --ext .ts --config eslint.config.cjs
+        run: npx eslint . 
         working-directory: ${{ inputs.project_path }}
 
   test:
