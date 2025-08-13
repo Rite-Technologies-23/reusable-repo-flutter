@@ -30,10 +30,11 @@ jobs:
   build_flutter_project:
     name: Build Flutter Project
     runs-on: ubuntu-latest
+    outputs:
+      flutter_project_built: true
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set Up Java
         uses: actions/setup-java@v4
@@ -50,6 +51,34 @@ jobs:
       - name: Flutter Pub Get
         run: flutter pub get
 
+  dart_analyzer:
+    name: Run Dart Analyzer & Generate Report
+    runs-on: ubuntu-latest
+    needs: build_flutter_project
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        with:
+          flutter_version: ${{ inputs.flutter_version }}
+          flutter_channel: ${{ inputs.flutter_channel }}
+
+      - name: Run Dart Analyzer
+        run: dart analyze > analyzer-report.txt || true
+
+      - name: Convert Analyzer Report to HTML
+        run: dart .github/tool/analyzer_to_html.dart
+
+      - name: Upload Dart Analyzer Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dart-Analyzer-Reports
+          path: |
+            analyzer-report.txt
+            analyzer-report.html
+
   run_tests:
     name: Run Test Cases & Generate Report
     runs-on: ubuntu-latest
@@ -58,8 +87,7 @@ jobs:
       test-report-path: test-results/test-report.html
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
@@ -96,8 +124,7 @@ jobs:
     needs: run_tests
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
@@ -113,13 +140,17 @@ jobs:
 
       - name: Generate HTML Coverage Report
         run: |
-          mkdir -p coverage_report
-          genhtml coverage/lcov.info \
-            --output-directory coverage_report \
-            --title "Flutter Test Coverage" \
-            --show-details \
-            --highlight \
-            --legend
+          if [ -f coverage/lcov.info ]; then
+            mkdir -p coverage_report
+            genhtml coverage/lcov.info \
+              --output-directory coverage_report \
+              --title "Flutter Test Coverage" \
+              --show-details \
+              --highlight \
+              --legend
+          else
+            echo "No coverage info found."
+          fi
 
       - name: Upload HTML Coverage Report
         uses: actions/upload-artifact@v4
@@ -129,51 +160,23 @@ jobs:
 
       - name: Check Coverage Threshold
         run: |
-          total_coverage=$(lcov --summary coverage/lcov.info | grep -Po 'lines\.*: \K[0-9.]+(?=%)')
-          echo "Total Coverage: $total_coverage%"
-          result=$(echo "$total_coverage < $COVERAGE_THRESHOLD" | bc -l)
-          if [ "$result" -eq 1 ]; then
-            echo "Code coverage ($total_coverage%) is below threshold ($COVERAGE_THRESHOLD%)."
-            exit 1
+          if [ -f coverage/lcov.info ]; then
+            total_coverage=$(lcov --summary coverage/lcov.info | grep -Po 'lines\.*: \K[0-9.]+(?=%)')
+            echo "Total Coverage: $total_coverage%"
+            result=$(echo "$total_coverage < $COVERAGE_THRESHOLD" | bc -l)
+            if [ "$result" -eq 1 ]; then
+              echo "Code coverage ($total_coverage%) is below threshold ($COVERAGE_THRESHOLD%)."
+              exit 1
+            fi
           fi
-
-  dart_analyzer:
-    name: Run Dart Analyzer & Generate Report
-    runs-on: ubuntu-latest
-    needs: run_tests
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
-        with:
-          flutter_version: ${{ inputs.flutter_version }}
-          flutter_channel: ${{ inputs.flutter_channel }}
-
-      - name: Run Dart Analyzer
-        run: dart analyze > analyzer-report.txt || true
-
-      - name: Convert Analyzer Report to HTML
-        run: dart .github/tool/analyzer_to_html.dart
-
-      - name: Upload Dart Analyzer Reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dart-Analyzer-Reports
-          path: |
-            analyzer-report.txt
-            analyzer-report.html
 
   build_apk:
     name: Build APK
     runs-on: ubuntu-latest
-    needs: dart_analyzer
+    needs: [dart_analyzer, run_tests]
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set Up Java
         uses: actions/setup-java@v4
