@@ -20,7 +20,6 @@ on:
         required: false
         type: string
         default: './terraform'
-      # --- NEW: Flags to enable deployment to specific clouds ---
       enable_aws:
         required: false
         type: boolean
@@ -62,8 +61,6 @@ jobs:
           name: build-apk
           path: apks
 
-      # Note: Add a similar step to download 'build-ipa' if you build for iOS
-
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
@@ -85,8 +82,6 @@ jobs:
           asset_path: ./apks/app-armeabi-v7a-release.apk
           asset_name: app-armeabi-v7a-v${{ inputs.version }}.apk
           asset_content_type: application/vnd.android.package-archive
-      
-      # Add more upload steps for other APK splits (arm64-v8a, x86_64) and the IPA if needed.
 
   deploy:
     name: Deploy to Cloud with Terraform
@@ -100,7 +95,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: "1.5.0" # Specify your desired version
+          terraform_version: "1.5.0" 
 
       # --- Cloud Provider Authentication ---
       # The workflow will only run the block for which secrets are provided.
@@ -111,7 +106,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: "us-east-1" # Or your desired region
+          aws-region: "us-east-1" 
 
       - name: Authenticate to Google Cloud
         if: ${{ inputs.enable_gcp && secrets.GOOGLE_CREDENTIALS != '' }}
