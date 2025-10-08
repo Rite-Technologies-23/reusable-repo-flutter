@@ -1,101 +1,154 @@
-name: Incremental Release
+# .github/workflows/reusable-cd.yml
+# This workflow handles the Continuous Deployment process.
+# 1. Creates a GitHub Release.
+# 2. Attaches build artifacts (APK/IPA) to the release.
+# 3. Conditionally runs Terraform to deploy/update cloud infrastructure.
+
+name: "Reusable Flutter CD"
 
 on:
   workflow_call:
     inputs:
       version:
+        required: true
+        type: string
+      deploy_to_cloud:
+        required: false
+        type: boolean
+        default: false
+      terraform_working_dir:
         required: false
         type: string
+        default: './terraform'
+      # --- NEW: Flags to enable deployment to specific clouds ---
+      enable_aws:
+        required: false
+        type: boolean
+        default: false
+      enable_gcp:
+        required: false
+        type: boolean
+        default: false
+      enable_azure:
+        required: false
+        type: boolean
+        default: false
     secrets:
       PAT_TOKEN:
         required: true
-    outputs:
-      version:
-        description: "The new release version tag"
-        value: ${{ jobs.release.outputs.version }}
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      GOOGLE_CREDENTIALS:
+        required: false
+      ARM_CLIENT_ID:
+        required: false
+      ARM_CLIENT_SECRET:
+        required: false
+      ARM_SUBSCRIPTION_ID:
+        required: false
+      ARM_TENANT_ID:
+        required: false
 
 jobs:
-  release:
+  create_release:
+    name: Create GitHub Release and Upload Artifacts
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Download APK Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-apk
+          path: apks
 
+      # Note: Add a similar step to download 'build-ipa' if you build for iOS
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          tag_name: v${{ inputs.version }}
+          release_name: Release v${{ inputs.version }}
+          body: "Automated release for version ${{ inputs.version }}."
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./apks/app-armeabi-v7a-release.apk
+          asset_name: app-armeabi-v7a-v${{ inputs.version }}.apk
+          asset_content_type: application/vnd.android.package-archive
+      
+      # Add more upload steps for other APK splits (arm64-v8a, x86_64) and the IPA if needed.
+
+  deploy:
+    name: Deploy to Cloud with Terraform
+    if: ${{ inputs.deploy_to_cloud }}
+    needs: create_release
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false  # ✅ Important for using PAT instead of GITHUB_TOKEN
 
-      - name: Set Up Git User
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.5.0" # Specify your desired version
+
+      # --- Cloud Provider Authentication ---
+      # The workflow will only run the block for which secrets are provided.
+
+      - name: Authenticate to AWS
+        if: ${{ inputs.enable_aws && secrets.AWS_ACCESS_KEY_ID != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: "us-east-1" # Or your desired region
+
+      - name: Authenticate to Google Cloud
+        if: ${{ inputs.enable_gcp && secrets.GOOGLE_CREDENTIALS != '' }}
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+
+      - name: Authenticate to Azure
+        if: ${{ inputs.enable_azure && secrets.ARM_CLIENT_ID != '' }}
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          client-secret: ${{ secrets.ARM_CLIENT_SECRET }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+      
+      # --- Run Terraform ---
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir="${{ inputs.terraform_working_dir }}" init
+
+      - name: Terraform Plan
+        id: plan
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          terraform -chdir="${{ inputs.terraform_working_dir }}" plan -no-color \
+            -var="app_version=${{ inputs.version }}" \
+            -var="enable_aws=${{ inputs.enable_aws }}" \
+            -var="enable_gcp=${{ inputs.enable_gcp }}" \
+            -var="enable_azure=${{ inputs.enable_azure }}"
+        continue-on-error: true
 
-      - name: Get Latest Tag and Bump Version
-        id: version
+      - name: Terraform Apply
+        id: apply
+        if: steps.plan.outcome == 'success'
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            new_tag="${{ inputs.version }}"
-          else
-            latest_tag=$(git tag --sort=-v:refname | grep '^v' | head -n 1)
-            echo "Latest tag: $latest_tag"
-
-            if [ -z "$latest_tag" ]; then
-              new_tag="v1.0.0"
-            else
-              version=${latest_tag#v}
-              IFS='.' read -r major minor patch <<< "$version"
-              patch=$((patch + 1))
-              new_tag="v$major.$minor.$patch"
-            fi
-          fi
-
-          echo "New tag: $new_tag"
-          echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
-
-      - name: Set Up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: 17
-
-      - name: Set Up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.x'
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release --split-per-abi
-
-      - name: Create Git Tag and Push
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Configure Git user"
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
-          echo "Set remote using PAT"
-          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
-          git remote -v
-
-          echo "Create Git tag"
-          git tag ${{ steps.version.outputs.tag }}
-
-          echo "Push Git tag"
-          git push origin ${{ steps.version.outputs.tag }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Flutter Release ${{ steps.version.outputs.tag }}"
-          files: |
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
-          token: ${{ secrets.PAT_TOKEN }}  # ✅ Explicitly pass PAT here
+          terraform -chdir="${{ inputs.terraform_working_dir }}" apply -auto-approve \
+            -var="app_version=${{ inputs.version }}" \
+            -var="enable_aws=${{ inputs.enable_aws }}" \
+            -var="enable_gcp=${{ inputs.enable_gcp }}" \
+            -var="enable_azure=${{ inputs.enable_azure }}"
