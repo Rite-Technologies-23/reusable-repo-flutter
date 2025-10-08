@@ -1,4 +1,8 @@
-name: "Flutter CI Reusable Workflow"
+# .github/workflows/reusable-ci.yml
+# This workflow lives in a central repository for reusable workflows.
+# It handles building, analyzing, testing, and creating artifacts for a Flutter project.
+
+name: "Reusable Flutter CI"
 
 on:
   workflow_call:
@@ -13,195 +17,169 @@ on:
         required: true
         type: string
       build_ios:
-        required: true
+        required: false
         type: boolean
+        default: false
     secrets:
       SONAR_TOKEN:
         required: false
       CODACY_PROJECT_TOKEN:
         required: false
 
-env:
-  FLUTTER_VERSION: ${{ inputs.flutter_version }}
-  FLUTTER_CHANNEL: ${{ inputs.flutter_channel }}
-  COVERAGE_THRESHOLD: ${{ inputs.coverage_threshold }}
-
 jobs:
-  build_flutter_project:
-    name: Build Flutter Project
+  # This job sets up the environment and dependencies once.
+  # It then uploads the entire workspace as an artifact for other jobs to use.
+  setup:
+    name: Setup Environment & Dependencies
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Set Up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: 17
+          java-version: '17'
 
       - name: Setup Flutter
-        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        uses: subosito/flutter-action@v2
         with:
-          flutter_version: ${{ inputs.flutter_version }}
-          flutter_channel: ${{ inputs.flutter_channel }}
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: ${{ inputs.flutter_channel }}
+          cache: true # Enable caching for faster subsequent runs
 
-      - name: Flutter Pub Get
+      - name: Install Dependencies
         run: flutter pub get
 
-  dart_analyzer:
-    name: Run Dart Analyzer & Generate Report
-    runs-on: ubuntu-latest
-    needs: build_flutter_project
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+      - name: Upload Workspace
+        uses: actions/upload-artifact@v4
         with:
-          flutter_version: ${{ inputs.flutter_version }}
-          flutter_channel: ${{ inputs.flutter_channel }}
+          name: workspace
+          path: .
+
+  # This job runs analysis and tests in parallel.
+  analyze_and_test:
+    name: Analyze & Test
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace
+          path: .
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: ${{ inputs.flutter_channel }}
+          cache: true
 
       - name: Run Dart Analyzer
-        run: |
-          dart analyze > analyzer-report.txt || true
-          echo "Analyzer completed."
+        run: dart analyze > analyzer-report.txt
 
-      - name: Check for Dart Errors
-        run: |
-          if grep -q "error •" analyzer-report.txt; then
-            echo "Critical Dart analyzer errors found. Aborting build."
-            exit 1
-          else
-            echo "No critical errors found. Warnings will be ignored."
-          fi
-
-      - name: Convert Analyzer Report to HTML
-        run: dart .github/tool/analyzer_to_html.dart
-
-      - name: Upload Dart Analyzer Reports
+      - name: Upload Analyzer Report
         uses: actions/upload-artifact@v4
         with:
-          name: Dart-Analyzer-Reports
-          path: |
-            analyzer-report.txt
-            analyzer-report.html
+          name: analyzer-report
+          path: analyzer-report.txt
 
-  run_tests:
-    name: Run Test Cases & Generate Report
-    runs-on: ubuntu-latest
-    needs: build_flutter_project
-    outputs:
-      test-report-path: test-results/test-report.html
+      - name: Run Tests and Generate Coverage
+        run: flutter test --coverage
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
-        with:
-          flutter_version: ${{ inputs.flutter_version }}
-          flutter_channel: ${{ inputs.flutter_channel }}
-
-      - name: Run Flutter Tests (Machine & Coverage Output)
-        run: |
-          mkdir -p test-results
-          flutter test --coverage --machine > test-results/results.json || true
-          cat test-results/results.json
-
-      - name: Convert Test Output to JUnit XML
-        run: |
-          dart run .github/tool/json_to_junit.dart < test-results/results.json > test-results/test-report.xml || true
-
-      - name: Generate HTML Test Report
-        uses: pl-strflt/junit-xml-to-html@v1
-        with:
-          mode: 'no-frames'
-          input: 'test-results/test-report.xml'
-          output: 'test-results/test-report.html'
-
-      - name: Upload Test Report
+      - name: Upload Coverage Info
         uses: actions/upload-artifact@v4
         with:
-          name: Flutter-Test-Report
-          path: test-results/test-report.html
+          name: coverage-info
+          path: coverage/lcov.info
 
-  test_coverage:
-    name: Run Test Coverage & Generate Report
+  # This job specifically checks if coverage meets the threshold.
+  check_coverage:
+    name: Verify Test Coverage
+    needs: analyze_and_test
     runs-on: ubuntu-latest
-    needs: run_tests
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+      - name: Download Coverage Info
+        uses: actions/download-artifact@v4
         with:
-          flutter_version: ${{ inputs.flutter_version }}
-          flutter_channel: ${{ inputs.flutter_channel }}
+          name: coverage-info
+          path: .
 
       - name: Install lcov
         run: sudo apt-get update && sudo apt-get install -y lcov
 
-      - name: Run Flutter Tests with Coverage
-        run: flutter test --coverage --machine > test-results/results.json || true
-
-      - name: Generate HTML Coverage Report
-        run: |
-          if [ -f coverage/lcov.info ]; then
-            mkdir -p coverage_report
-            genhtml coverage/lcov.info \
-              --output-directory coverage_report \
-              --title "Flutter Test Coverage" \
-              --show-details \
-              --highlight \
-              --legend
-          else
-            echo "No coverage info found."
-          fi
-
-      - name: Upload HTML Coverage Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: Flutter-Coverage-Report
-          path: coverage_report/
-
       - name: Check Coverage Threshold
         run: |
-          if [ -f coverage/lcov.info ]; then
-            total_coverage=$(lcov --summary coverage/lcov.info | grep -Po 'lines\.*: \K[0-9.]+(?=%)')
-            echo "Total Coverage: $total_coverage%"
-            result=$(echo "$total_coverage < $COVERAGE_THRESHOLD" | bc -l)
-            if [ "$result" -eq 1 ]; then
-              echo "Code coverage ($total_coverage%) is below threshold ($COVERAGE_THRESHOLD%)."
-              exit 1
-            fi
+          total_coverage=$(lcov --summary lcov.info | grep -Po 'lines\.*: \K[0-9.]+(?=%)')
+          echo "Total Coverage: $total_coverage%"
+          if (( $(echo "$total_coverage < ${{ inputs.coverage_threshold }}" | bc -l) )); then
+            echo "Error: Code coverage ($total_coverage%) is below the required threshold of ${{ inputs.coverage_threshold }}%."
+            exit 1
+          else
+            echo "Success: Code coverage meets the threshold."
           fi
 
-  build_apk:
-    name: Build APK
+  # Build the Android APK.
+  build_android:
+    name: Build Android APK
+    needs: [check_coverage, analyze_and_test]
     runs-on: ubuntu-latest
-    needs: [dart_analyzer, run_tests]
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set Up Java
+      - name: Download Workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace
+          path: .
+          
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: 17
+          java-version: '17'
 
       - name: Setup Flutter
-        uses: Rite-Technologies-23/reusable-repo-flutter/.github/actions/setup-flutter@main
+        uses: subosito/flutter-action@v2
         with:
-          flutter_version: ${{ inputs.flutter_version }}
-          flutter_channel: ${{ inputs.flutter_channel }}
-
-      - name: Build Android APK
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: ${{ inputs.flutter_channel }}
+          cache: true
+      
+      - name: Build APK
         run: flutter build apk --split-per-abi
+      
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-apk
+          path: build/app/outputs/flutter-apk/
 
-      - name: Conditionally Build iOS App
-        if: ${{ inputs.build_ios }}
-        run: flutter build ios --no-codesign
+  # Build the iOS App (conditionally).
+  build_ios:
+    name: Build iOS App
+    if: ${{ inputs.build_ios }}
+    needs: [check_coverage, analyze_and_test]
+    runs-on: macos-latest # iOS builds MUST run on macOS
+    steps:
+      - name: Download Workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace
+          path: .
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: ${{ inputs.flutter_channel }}
+          cache: true
+      
+      - name: Build iOS IPA
+        run: flutter build ipa --no-codesign
+      
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-ipa
+          path: build/ios/ipa/
